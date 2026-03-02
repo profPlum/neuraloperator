@@ -193,19 +193,19 @@ class SpectralConv(BaseSpectralConv):
         Number of output channels
     max_n_modes : None or int tuple, default is None
         Number of modes to use for contraction in Fourier domain during training.
- 
+
         .. warning::
-            
-            We take care of the redundancy in the Fourier modes, therefore, for an input 
+
+            We take care of the redundancy in the Fourier modes, therefore, for an input
             of size I_1, ..., I_N, please provide modes M_K that are I_1 < M_K <= I_N
-            We will automatically keep the right amount of modes: specifically, for the 
-            last mode only, if you specify M_N modes we will use M_N // 2 + 1 modes 
+            We will automatically keep the right amount of modes: specifically, for the
+            last mode only, if you specify M_N modes we will use M_N // 2 + 1 modes
             as the real FFT is redundant along that last dimension.
 
-            
+
         .. note::
 
-            Provided modes should be even integers. odd numbers will be rounded to the closest even number.  
+            Provided modes should be even integers. odd numbers will be rounded to the closest even number.
 
         This can be updated dynamically during training.
 
@@ -390,11 +390,11 @@ class SpectralConv(BaseSpectralConv):
                 list(range(2, x.ndim)),
                 output_shape=out_shape,
             )
-    
+
     @property
     def n_modes(self):
         return self._n_modes
-    
+
     @n_modes.setter
     def n_modes(self, n_modes):
         if isinstance(n_modes, int): # Should happen for 1D FNO only
@@ -448,13 +448,13 @@ class SpectralConv(BaseSpectralConv):
                               device=x.device, dtype=out_dtype)
         starts = [(max_modes - min(size, n_mode)) for (size, n_mode, max_modes) in zip(fft_size, self.n_modes, self.max_n_modes)]
         slices_w =  [slice(None), slice(None)] # Batch_size, channels
-        slices_w += [slice(start//2, -start//2) if start else slice(start, None) for start in starts[:-1]]
+        slices_w += [slice(start//2 + start%2, -(start//2)) if start else slice(start, None) for start in starts[:-1]]
         slices_w += [slice(None, -starts[-1]) if starts[-1] else slice(None)] # The last mode already has redundant half removed
         weight = self._get_weight(indices)[slices_w]
 
         starts = [(size - min(size, n_mode)) for (size, n_mode) in zip(list(x.shape[2:]), list(weight.shape[2:]))]
         slices_x =  [slice(None), slice(None)] # Batch_size, channels
-        slices_x += [slice(start//2, -start//2) if start else slice(start, None) for start in starts[:-1]]
+        slices_x += [slice(start//2 + start%2, -(start//2)) if start else slice(start, None) for start in starts[:-1]]
         slices_x += [slice(None, -starts[-1]) if starts[-1] else slice(None)] # The last mode already has redundant half removed
         out_fft[slices_x] = self._contract(x[slices_x], weight, separable=False)
 
@@ -465,7 +465,7 @@ class SpectralConv(BaseSpectralConv):
             mode_sizes = output_shape
 
         if self.order > 1:
-            out_fft = torch.fft.fftshift(out_fft, dim=fft_dims[:-1])
+            out_fft = torch.fft.ifftshift(out_fft, dim=fft_dims[:-1])
         x = torch.fft.irfftn(out_fft, s=mode_sizes, dim=fft_dims, norm=self.fft_norm)
 
         if self.bias is not None:
