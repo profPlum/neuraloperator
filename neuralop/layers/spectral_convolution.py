@@ -446,16 +446,17 @@ class SpectralConv(BaseSpectralConv):
             out_dtype = torch.cfloat
         out_fft = torch.zeros([batchsize, self.out_channels, *fft_size],
                               device=x.device, dtype=out_dtype)
-        starts = [(max_modes - min(size, n_mode)) for (size, n_mode, max_modes) in zip(fft_size, self.n_modes, self.max_n_modes)]
+        slice_end = lambda end_index: end_index if end_index else None # handles -0 indexing edge case
+        starts = [(max_modes - min(size, n_mode)) for (size, n_mode, max_modes) in zip(fft_size, self.n_modes, self.max_n_modes)] # starts=n_modes_to_drop
         slices_w =  [slice(None), slice(None)] # Batch_size, channels
-        slices_w += [slice(start//2 + start%2, -(start//2)) if start else slice(start, None) for start in starts[:-1]]
-        slices_w += [slice(None, -starts[-1]) if starts[-1] else slice(None)] # The last mode already has redundant half removed
+        slices_w += [slice(start//2 + start%2, slice_end(-(start//2))) for start in starts[:-1]]
+        slices_w += [slice(None, slice_end(-starts[-1]))] # The last mode already has redundant half removed
         weight = self._get_weight(indices)[slices_w]
 
         starts = [(size - min(size, n_mode)) for (size, n_mode) in zip(list(x.shape[2:]), list(weight.shape[2:]))]
         slices_x =  [slice(None), slice(None)] # Batch_size, channels
-        slices_x += [slice(start//2 + start%2, -(start//2)) if start else slice(start, None) for start in starts[:-1]]
-        slices_x += [slice(None, -starts[-1]) if starts[-1] else slice(None)] # The last mode already has redundant half removed
+        slices_x += [slice(start//2 + start%2, slice_end(-(start//2))) for start in starts[:-1]]
+        slices_x += [slice(None, slice_end(-starts[-1]))] # The last mode already has redundant half removed
         out_fft[slices_x] = self._contract(x[slices_x], weight, separable=False)
 
         if self.output_scaling_factor is not None and output_shape is None:
